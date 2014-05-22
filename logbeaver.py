@@ -47,6 +47,9 @@ def main ():
 
 		try:
 			match = line_regexp.match(line)
+			if match is None:
+				log.warning("failed to match line: %s" % repr(line))
+				continue
 			request_time, upstream_response_time, status, verb, url = match.groups()
 
 			assert request_time != '-', line
