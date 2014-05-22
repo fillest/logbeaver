@@ -20,7 +20,7 @@ def main ():
 	log = logging.getLogger(__name__)
 
 	local_fqdn = socket.getfqdn()
-	log.info('Starting. Using fqdn: %s' % local_fqdn)
+	log.info('Starting. Using fqdn "%s", statsd "%s:%s"' % (local_fqdn, args.host, args.port))
 
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
