@@ -14,6 +14,8 @@ def main ():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--host', default = '127.0.0.1')
 	parser.add_argument('--port', default = 8125, type = int)
+	parser.add_argument('--verbose', '-v', action = 'store_true')
+	parser.add_argument('--no-parse-fail-warn', '-npw', action = 'store_true')
 	args = parser.parse_args()
 
 	logging.basicConfig(level = logging.INFO, format = '%(asctime)s %(levelname)-5s %(filename)s:%(funcName)s:%(lineno)d  %(message)s')
@@ -35,7 +37,7 @@ def main ():
 
 	# log_format for_logstash '[$time_local] $request_time $upstream_response_time $upstream_cache_status $status'
 	#                                 ' "$request" $remote_addr "$http_referer" "$http_user_agent"';
-	line_regexp = re.compile(r'\[.+\] ([^ ]+) ([^ ]+) [^ ]+ ([^ ]+) "([^ ]+) ([^ ]+)')
+	line_regexp = re.compile(r'\[.+\] ([^ ]+) \[(.+)\] [^ ]+ ([^ ]+) "([^ ]+) ([^ ]+)')
 
 	dispatch_re = re.compile(r'/dispatch/[A-Z\d]+')
 	stat_re = re.compile(r'/stat/?$')
@@ -48,9 +50,18 @@ def main ():
 		try:
 			match = line_regexp.match(line)
 			if match is None:
-				log.warning("failed to match line: %s" % repr(line))
+				if not args.no_parse_fail_warn:
+					log.warning("failed to match line: %s" % repr(line))
 				continue
 			request_time, upstream_response_time, status, verb, url = match.groups()
+
+			#handle nginx upstream retries (defaults + fail_timeout=0)
+			#TODO think more
+			if upstream_response_time != '-':
+				v = [float(v) for v in upstream_response_time.split(', ')]
+				m = max(v)
+				assert m == v[-1], line
+				upstream_response_time = m
 
 			assert request_time != '-', line
 			batch_data = [
@@ -94,6 +105,9 @@ def main ():
 					else:
 						log.warning("upstream_response_time == '-': %s" % repr(line))
 
+			if args.verbose:
+				#TODO better use debug level instead of flag (or raise level with flag)?
+				log.info(batch_data)
 
 			data = "\n".join(batch_data)
 			# print len(data) #TODO https://github.com/etsy/statsd/blob/master/docs/metric_types.md#multi-metric-packets
