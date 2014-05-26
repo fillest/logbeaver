@@ -55,6 +55,12 @@ def main ():
 				continue
 			request_time, upstream_response_time, status, verb, url = match.groups()
 
+			assert request_time != '-', line
+			batch_data = [
+				"logstash.%s.nginx_access.response.%s:1|c" % (local_fqdn, status),
+				"logstash.%s.nginx_access.request_time:%s|ms" % (local_fqdn, request_time),
+			]
+
 			#handle nginx upstream retries (defaults + fail_timeout=0)
 			#TODO think more
 			if upstream_response_time != '-':
@@ -63,11 +69,9 @@ def main ():
 				assert m == v[-1], line
 				upstream_response_time = m
 
-			assert request_time != '-', line
-			batch_data = [
-				"logstash.%s.nginx_access.response.%s:1|c" % (local_fqdn, status),
-				"logstash.%s.nginx_access.request_time:%s|ms" % (local_fqdn, request_time),
-			]
+				num = len(v) - 1
+				if num:
+					batch_data.append("logstash.%s.nginx_access.upstream_retries:%s|c" % (local_fqdn, num))
 
 			if upstream_response_time != '-':
 				batch_data.append("logstash.%s.nginx_access.upstream_response_time:%s|ms" % (local_fqdn, upstream_response_time))
