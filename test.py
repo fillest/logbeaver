@@ -80,6 +80,7 @@ def capture_stderr ():
 		os.close(w)
 		rf = os.fdopen(r)
 		result[0] = rf.read().strip()
+		# print result[0]
 		rf.close()
 
 class NonRequestLoggingWSGIRequestHandler (wsgiref.simple_server.WSGIRequestHandler):
@@ -125,7 +126,7 @@ class Test1 (unittest.TestCase):
 		# logging.info("test")
 
 		successes = collections.deque()
-		add_success = lambda: successes.append(None)
+		add_success = lambda i: successes.append(i)
 
 		config = Configurator()
 
@@ -145,7 +146,7 @@ class Test1 (unittest.TestCase):
 		hook = sys.excepthook
 		def for_test (*args):
 			hook(*args)
-			add_success()
+			add_success(1)
 		sys.excepthook = for_test
 		
 
@@ -192,7 +193,7 @@ class Test1 (unittest.TestCase):
 				if e.code != 500:
 				# if e.code != 404:
 					raise
-				add_success()
+				add_success(2)
 		thr = threading.Thread(target = req_app)
 		# thr.daemon = True
 		thr.start()
@@ -207,4 +208,60 @@ class Test1 (unittest.TestCase):
 		assert out.count('}$$') == 1, out
 
 
-		self.assertEquals(len(successes), 2)
+		self.assertEquals(len(successes), 2, successes)
+
+	def test_2 (self):
+		fd = os.open("test1.log", os.O_RDONLY)
+
+		start_pos = 0
+
+		while True:
+			real_pos = os.lseek(fd, start_pos, os.SEEK_SET)
+			assert real_pos == start_pos, (start_pos, real_pos)
+
+			#TODO if size is not long enough, can stuck in infinite loop
+			# read_size = 1024
+			read_size = 1024 + 400
+			chunk = os.read(fd, read_size)
+			if not chunk: #eof
+				print "eof"
+				#TODO
+				break
+				# time.sleep(1)
+				# continue
+			print "#######", len(chunk), chunk
+
+			pos = 0
+
+			print "_"*100
+			while True:
+				maybe_start = chunk[pos:pos+len('$${')]
+				if not maybe_start:
+					break
+				assert maybe_start == '$${', repr(maybe_start)
+
+				i = chunk.find('}$$', pos)
+				if i == -1:
+					break
+
+				msg = chunk[pos:i]
+				print "@@@@", msg#.strip()
+
+				# pos = i + len('}$$')
+				# pos = i + len('}$$\n')
+				assert chunk[i:i+len('}$$\n')] == '}$$\n', repr(chunk[i:i+len('}$$\n')])
+				pos = i + len('}$$\n')
+
+				#can yield pos here
+
+				# # assert chunk[pos:pos+len('\n$${')] == '\n$${', repr(chunk[pos:pos+len('\n$${')])
+				# assert chunk[pos:pos+len('\n')] == '\n', repr(chunk[pos:pos+len('\n')])
+				# # pos += len('\n$${')
+				# pos += len('\n')
+
+			# left_data = chunk[pos:]
+			#if left_data
+				#TODO data can stuck here forever if disk is full
+
+			start_pos += pos
+			# break
