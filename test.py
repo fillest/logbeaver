@@ -16,6 +16,7 @@ import collections
 import traceback
 import sys
 from contextlib import contextmanager
+import tempfile
 
 
 def patch_everything ():
@@ -211,57 +212,109 @@ class Test1 (unittest.TestCase):
 		self.assertEquals(len(successes), 2, successes)
 
 	def test_2 (self):
-		fd = os.open("test1.log", os.O_RDONLY)
+		fd, path = tempfile.mkstemp()
+		# print path
+		try:
+			def write_to_log ():
+				for i in range(2):
+					time.sleep(1)
+					with open(path, 'ab') as f:
+						f.write("$${2014-08-01 02:35:25,978 WARNI test.py:test_1:154  tessst %s}$$\n" % i)
+					print "wrote"
+			thr = threading.Thread(target = write_to_log)
+			thr.daemon = True
+			thr.start()
 
-		start_pos = 0
-
-		while True:
-			real_pos = os.lseek(fd, start_pos, os.SEEK_SET)
-			assert real_pos == start_pos, (start_pos, real_pos)
-
-			#TODO if size is not long enough, can stuck in infinite loop
-			# read_size = 1024
-			read_size = 1024 + 400
-			chunk = os.read(fd, read_size)
-			if not chunk: #eof
-				print "eof"
-				#TODO
-				break
-				# time.sleep(1)
-				# continue
-			print "#######", len(chunk), chunk
-
-			pos = 0
-
-			print "_"*100
+			n = 0
+			start_pos = 0
 			while True:
-				maybe_start = chunk[pos:pos+len('$${')]
-				if not maybe_start:
-					break
-				assert maybe_start == '$${', repr(maybe_start)
+				for next_pos, msg in fetch_msgs(fd, start_pos):
+					if next_pos is None:
+						time.sleep(0.5)
+					else:
+						start_pos = next_pos
+						print "@@@@", next_pos, msg
+						n += 1
+						if n == 2:
+							return
+		finally:
+			os.remove(path)
 
-				i = chunk.find('}$$', pos)
-				if i == -1:
-					break
 
-				msg = chunk[pos:i]
-				print "@@@@", msg#.strip()
+		# fd = os.open("test1.log", os.O_RDONLY)
+		# # fd = os.open("test1_cut.log", os.O_RDONLY)
 
-				# pos = i + len('}$$')
-				# pos = i + len('}$$\n')
-				assert chunk[i:i+len('}$$\n')] == '}$$\n', repr(chunk[i:i+len('}$$\n')])
-				pos = i + len('}$$\n')
+		# start_pos = 0
+		# for next_pos, msg in fetch_msgs(fd, start_pos):
+		# 	print "@@@@", next_pos, msg
+		# 	if next_pos is None:
+		# 		break
 
-				#can yield pos here
 
-				# # assert chunk[pos:pos+len('\n$${')] == '\n$${', repr(chunk[pos:pos+len('\n$${')])
-				# assert chunk[pos:pos+len('\n')] == '\n', repr(chunk[pos:pos+len('\n')])
-				# # pos += len('\n$${')
-				# pos += len('\n')
+def fetch_msgs (fd, start_pos):
+	msg_read_num_last = 0
 
-			# left_data = chunk[pos:]
-			#if left_data
-				#TODO data can stuck here forever if disk is full
+	while True:
+		real_pos = os.lseek(fd, start_pos, os.SEEK_SET)
+		assert real_pos == start_pos, (start_pos, real_pos)
 
-			start_pos += pos
-			# break
+		#TODO if size is not long enough, can stuck in infinite loop
+		# read_size = 1024
+		read_size = 1024 + 400
+		chunk = os.read(fd, read_size)
+		if not chunk: #eof
+			print "eof"
+			#TODO
+			yield None, None
+			return
+			# time.sleep(1)
+			# continue
+		print "#######", len(chunk), chunk
+
+		pos = 0
+		msg_parsed_num = 0
+
+		print "_"*100
+		while True:
+			maybe_start = chunk[pos:pos+len('$${')]
+			if not maybe_start:
+				break
+			#TODO parse the stuff here, it can be caused by print
+			assert maybe_start == '$${', repr(maybe_start)
+
+			i = chunk.find('}$$', pos)
+			if i == -1:
+				break
+
+			msg_parsed_num += 1
+
+			msg = chunk[pos:i]
+			# print "@@@@", msg#.strip()
+
+			# pos = i + len('}$$')
+			# pos = i + len('}$$\n')
+			assert chunk[i:i+len('}$$\n')] == '}$$\n', repr(chunk[i:i+len('}$$\n')])
+			pos = i + len('}$$\n')
+
+			yield start_pos + pos, msg#.strip()
+
+			# # assert chunk[pos:pos+len('\n$${')] == '\n$${', repr(chunk[pos:pos+len('\n$${')])
+			# assert chunk[pos:pos+len('\n')] == '\n', repr(chunk[pos:pos+len('\n')])
+			# # pos += len('\n$${')
+			# pos += len('\n')
+
+		# left_data = chunk[pos:]
+		#if left_data
+			#TODO data can stuck here forever if disk is full; also files can be deleted after this so
+			#it has to be restarted by hand (bad)
+
+		if (not msg_parsed_num) and not msg_read_num_last:
+			print "data is still incomplete"
+			#TODO
+			yield None, None
+			return
+
+		msg_read_num_last = msg_parsed_num
+
+		start_pos += pos
+		# break

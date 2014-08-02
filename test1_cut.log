@@ -1,0 +1,31 @@
+$${2014-08-01 02:35:25,978 WARNI test.py:test_1:154  tessst}$$
+$${2014-08-01 02:35:25,979 WARNI test.py:test_1:163  /home/f/proj/logbeaver/test.py:163: UserWarning: tessst
+  warnings.warn("tessst")
+}$$
+$${2014-08-01 02:35:25,982 ERROR test.py:log_exc:119  Traceback (most recent call last):
+  File "/home/f/proj/logbeaver/test.py", line 33, in run_with_except_hook
+    run_old(*args, **kw)
+  File "/usr/lib/python2.7/threading.py", line 504, in run
+    self.__target(*self.__args, **self.__kwargs)
+  File "/home/f/proj/logbeaver/test.py", line 173, in raise_exc_in_thread
+    raise TestException()
+TestException
+}$$
+$${2014-08-01 02:35:26,391 ERROR test.py:log_exc:119  Traceback (most recent call last):
+  File "/home/f/proj/logbeaver/test.py", line 100, in __call__
+    return self.app(environ, start_response)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/router.py", line 242, in __call__
+    response = self.invoke_subrequest(request, use_tweens=True)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/router.py", line 217, in invoke_subrequest
+    response = handle_request(request)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/tweens.py", line 21, in excview_tween
+    response = handler(request)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/router.py", line 163, in handle_request
+    response = view_callable(context, request)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/config/views.py", line 355, in rendered_view
+    result = view(context, request)
+  File "/home/f/proj/logbeaver/venv/local/lib/python2.7/site-packages/pyramid/config/views.py", line 501, in _requestonly_view
+    response = view(request)
+  File "/home/f/proj/logbeaver/test.py", line 139, in hello_world
+    raise TestException()
+TestExc
