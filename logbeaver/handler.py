@@ -3,16 +3,20 @@ import beanstalkc
 import cPickle
 import sys
 import threading
+import time
 
 
 PICKLE_PROTOCOL = 2
 
 
+def now_formatted ():
+	return time.strftime("%Y-%m-%d %H:%M:%SUTC", time.gmtime())
+
 #https://docs.python.org/2/library/logging.html#handler-objects
 #https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432
 class BeanstalkHandler (logging.Handler):
-	def __init__ (self, source = 'test', host = 'localhost', port = 11301,  #port is default + 1
-	              tube = 'logbeaver', connect_timeout = 3, level = logging.NOTSET):
+	def __init__ (self, source = 'test', tube = 'logbeaver', host = 'localhost', port = 11301,  #port is default + 1
+	              connect_timeout = 3, level = logging.NOTSET):
 		logging.Handler.__init__(self, level = level)
 
 		self.source = source
@@ -35,10 +39,13 @@ class BeanstalkHandler (logging.Handler):
 		# 	if e.errno != 111: #Connection refused
 		# 		raise
 		except Exception as e:
-			#TODO where are we? separate thread?
-			sys.stderr.write("Failed to connect to beanstalk: %s\n" % e) #TODO wtf doesnt get printed in test?
+			#TODO where are we? not separate thread?
+
+			#TODO wtf doesnt get printed in test?
+			#TODO use local custom logger?
+			sys.stderr.write("%s  Failed to connect to beanstalk: %s\n" % (now_formatted(), e))
 			sys.stderr.flush()
-			raise #TODO it does nothing
+			raise #TODO it does nothing?
 
 	def emit (self, record):
 		d = None
@@ -56,7 +63,11 @@ class BeanstalkHandler (logging.Handler):
 			d = dict(record.__dict__)
 			d['_source'] = self.source
 			#https://docs.python.org/2/library/logging.html#logrecord-objects
+			#TODO we dont just rewrite msg here for some reason -- what reason? document it, check with tests
 			d['msg_rendered'] = record.getMessage()
+			#  but msg can be obj (see above) so we need to do smth with it
+			#  lets just del it until investigated
+			del d['msg']
 
 			if not self.conn:
 				self._connect()
@@ -67,7 +78,7 @@ class BeanstalkHandler (logging.Handler):
 			if ei:
 				record.exc_info = ei  #for next handler
 
-			#TODO try catch
+			#TODO try catch?
 			_job_id = self.conn.put(s)
 			assert _job_id
 		except (KeyboardInterrupt, SystemExit):
@@ -75,7 +86,8 @@ class BeanstalkHandler (logging.Handler):
 		except:
 			#writing to beanstalk failed so we just dump out the record and try reconnect next time
 			#TODO try resend? think if it can explode under load
-			sys.stderr.write("Failed to send to beanstalk, record: %s\n" % (d or record.__dict__))
+			#   can use separate thread for retries
+			sys.stderr.write("%s  Failed to send to beanstalk, record: %s\n" % (now_formatted, d or record.__dict__))
 			sys.stderr.flush()
 
 			#TODO what happens to the exc? -- seems its being printed like that:
@@ -161,18 +173,21 @@ class Middleware (object):
 	def __init__(self, application):
 		self.app = application
 
+	def response_with_error (self, start_response):
+		body = 'Internal Server Error'
+		start_response('500 Internal Server Error', [
+			('Content-Type', 'text/plain'), #?text/html
+			('Content-Length', str(len(body)))
+		])
+		return [body]
+
 	def __call__(self, environ, start_response):
 		try:
 			return self.app(environ, start_response)
-		#TODO
+		#TODO -- seems no need?
 		# except (pyramid.httpexceptions.WSGIHTTPException,):
 			# raise
 		except:
 			log_exc(*sys.exc_info())
 
-			body = 'Internal Server Error'
-			start_response('500 Internal Server Error', [
-				('Content-Type', 'text/plain'), #?text/html
-				('Content-Length', str(len(body)))
-			])
-			return [body]
+			return self.response_with_error(start_response)

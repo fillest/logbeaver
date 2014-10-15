@@ -18,8 +18,9 @@ import sys
 from contextlib import contextmanager
 import tempfile
 import sqlite3
-import que
-import handler
+from logbeaver import queproc
+from logbeaver import handler
+
 
 #http://stackoverflow.com/questions/4675728/redirect-stdout-to-a-file-in-python/22434262#22434262
 def fileno(file_or_fd):
@@ -84,24 +85,32 @@ class Test1 (unittest.TestCase):
 		# config.include('pyramid_exclog')
 		
 		config.add_route('test', '/test')
-		def hello_world (request):
+		config.add_route('test1', '/test1')
+		def raise_exc_view (request):
 			# from pyramid.httpexceptions import exception_response; raise exception_response(404)
 			# from pyramid.httpexceptions import HTTPNotFound; raise HTTPNotFound()
 			raise TestException()
-		config.add_view(hello_world, route_name='test', renderer = 'string')
+		def raise_404 (request):
+			# from pyramid.httpexceptions import exception_response; raise exception_response(404)
+			from pyramid.httpexceptions import HTTPNotFound; raise HTTPNotFound()
+		config.add_view(raise_exc_view, route_name='test', renderer = 'string')
+		config.add_view(raise_404, route_name='test1', renderer = 'string')
 		app = config.make_wsgi_app()
 		app = handler.Middleware(app)
 		
 
 		handler.patch_everything()
+
 		hook = sys.excepthook
 		def for_test (*args):
 			hook(*args)
 			add_success(1)
 		sys.excepthook = for_test
 		
-
-		p = que.QueueProcessor()
+		class NoSendQueueProcessor (queproc.QueueProcessor):
+			def _send (self, data):
+				return True
+		p = NoSendQueueProcessor(bean_tube = 'tests')
 		g = p.run_loop(timeout = 3)
 
 		p.clear_queue()
@@ -119,13 +128,13 @@ class Test1 (unittest.TestCase):
 		r = g.next()
 		# print r
 		self.assertEquals(r['msg'], "test1")
-		g.next()
+		# g.next()
 
 		r = g.next()
 		# print r
 		self.assertEquals(r['msg'], "%s")
 		assert "test2" in r['msg_rendered'], r
-		g.next()
+		# g.next()
 
 		# print p.conn.stats()
 
@@ -137,13 +146,13 @@ class Test1 (unittest.TestCase):
 		thr = threading.Thread(target = raise_exc_in_thread)
 		# thr.daemon = True
 		thr.start()
-		time.sleep(0.2)
+		time.sleep(0.1)
 
 		r = g.next()
 		# print r
 		# self.assertEquals(r['msg'], "%s")
 		assert "TestException" in r['exc_text'], r
-		g.next()
+		# g.next()
 
 
 		server = make_server('127.0.0.1', 7325, app, handler_class = NonRequestLoggingWSGIRequestHandler)
@@ -168,7 +177,26 @@ class Test1 (unittest.TestCase):
 		# self.assertEquals(r['msg'], "%s")
 		assert "TestException" in r['exc_text'], r
 		assert "test.TestException" in r['msg_rendered'], r
-		g.next()
+		# g.next()
+
+
+		def req_app1 ():
+			time.sleep(0.2)
+			try:
+				urllib2.urlopen("http://localhost:7325/test1").read()
+			except urllib2.HTTPError as e:
+				if e.code != 404:
+					raise
+				add_success(3)
+		thr = threading.Thread(target = req_app1)
+		# thr.daemon = True
+		thr.start()
+
+		server.handle_request()
+
+		# r = g.next()
+
+		self.assertEquals(p.clear_queue(), 0)
 
 
 		try:
@@ -180,10 +208,25 @@ class Test1 (unittest.TestCase):
 		# print r
 		self.assertEquals(r['msg_rendered'], "test")
 		assert "ZeroDivisionError" in r['exc_text'], r
-		g.next()
+		# g.next()
 
 
-		self.assertEquals(len(successes), 2, successes)
+		self.assertEquals(len(successes), 3, successes)
+
+
+		p = queproc.QueueProcessor(bean_tube = 'tests')
+		g = p.run_loop(timeout = 3)
+
+		thr = threading.Thread(target = req_app)
+		# thr.daemon = True
+		thr.start()
+
+		server.handle_request()
+
+		r = g.next()
+		# print r
+
+
 
 
 		return
@@ -345,25 +388,6 @@ IntegrityError: (IntegrityError) duplicate key value violates unique constraint 
 		# 	level=logging.INFO)
 		# client.send(**msg)
 
-
-		import json
-		import requests
-		import socket
-		url = 'http://localhost:6543/create'
-		headers = {'content-type': 'application/json'}
-		payload = [{
-			'source': 'test',
-			'time': time.time(),
-			'title': 'exception',
-			'content': mesg,
-			'level': 'error',
-			'host': socket.getfqdn(),
-		}]
-		r = requests.post(url, data=json.dumps(payload), timeout=5, headers=headers)
-		#requests.exceptions.ConnectionError
-		#requests.exceptions.HTTPError
-		assert r.status_code == requests.codes.ok
-		self.assertEquals(r.text, 'ok')
 
 		# fd = os.open("test1.log", os.O_RDONLY)
 		# # fd = os.open("test1_cut.log", os.O_RDONLY)

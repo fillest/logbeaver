@@ -1,0 +1,2 @@
+include *.conf *.txt setup.cfg
+recursive-include logbeaver *.ico *.png *.css *.gif *.jpg *.pt *.txt *.mak *.mako *.js *.html *.xml *.pyx
