@@ -1,0 +1,3 @@
+hosts = user@example.com
+package_host = user@example.com
+key_filename = ~/my.pk

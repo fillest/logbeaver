@@ -1,0 +1,11 @@
+[program:logbeaver_queproc]
+command=/opt/logbeaver_queproc/venv/bin/python logbeaver/queproc.py http://example.com:8090
+directory=/opt/logbeaver_queproc/src
+user=logbeaver_queproc
+redirect_stderr=true
+stdout_logfile=/mnt/logbeaver_queproc.log
+autostart=true
+autorestart=true
+startsecs=8
+startretries=5
+stopwaitsecs=30

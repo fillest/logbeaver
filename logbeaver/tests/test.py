@@ -52,14 +52,37 @@ class Test1 (unittest.TestCase):
 		config.add_view(raise_404, route_name='test1', renderer = 'string')
 		app = config.make_wsgi_app()
 		app = handler.Middleware(app)
+		server = make_server('127.0.0.1', 7325, app, handler_class = NonRequestLoggingWSGIRequestHandler)
 
+
+		# #TODO automate, e.g. extra handler with wrong port
+		# def req_app ():
+		# 	time.sleep(0.1)
+		# 	try:
+		# 		urllib2.urlopen("http://localhost:7325/test").read()
+		# 	except urllib2.HTTPError as e:
+		# 		if e.code != 500:
+		# 			raise #TODO does it make the test failed? seems no
+		# thr = threading.Thread(target = req_app)
+		# # thr.daemon = True
+
+		# with util.capture_stderr() as out:
+		# 	thr.start()
+		# 	server.handle_request()
+		# out = out[0]
+		# # print "-"*30
+		# # print out
+		# # print "-"*30
+		# self.assertIn("TestException", out)
+		# self.assertIn("Connection refused", out)
+		# return
 
 		class NoSendQueueProcessor (queproc.QueueProcessor):
-			def _send (self, data):
+			def _send (self, data, reraise_on_error):
 				return True
 		#TODO unit test when beanstalkd is down here
 		tube = 'tests'
-		p = NoSendQueueProcessor(bean_tube = tube, bean_reconnect_limit = 10)
+		p = NoSendQueueProcessor(bean_tube = tube, bean_reconnect_limit = 5)
 		g = p.run_loop(timeout = 3)
 		
 
@@ -116,7 +139,6 @@ class Test1 (unittest.TestCase):
 		# g.next()
 
 
-		server = make_server('127.0.0.1', 7325, app, handler_class = NonRequestLoggingWSGIRequestHandler)
 
 		def req_app ():
 			time.sleep(0.1)
@@ -176,7 +198,7 @@ class Test1 (unittest.TestCase):
 
 
 		p = queproc.QueueProcessor(bean_tube = tube)
-		g = p.run_loop(timeout = 3)
+		g = p.run_loop(timeout = 3, reraise_on_error = True)
 
 		thr = threading.Thread(target = req_app)
 		# thr.daemon = True

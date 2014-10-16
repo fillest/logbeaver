@@ -27,30 +27,11 @@ class BeanstalkHandler (logging.Handler):
 
 		self.conn = None
 
-	def _connect (self):
-		try:
-			self.conn = beanstalkc.Connection(host = self.host, port = self.port, connect_timeout = self.connect_timeout)
-
-			old = self.conn._socket.gettimeout()  #None
-			self.conn._socket.settimeout(3) #TODO report? think about other commands
-			self.conn.use(self.tube)
-			self.conn._socket.settimeout(old)
-		# except beanstalkc.SocketError as e:
-		# 	if e.errno != 111: #Connection refused
-		# 		raise
-		except Exception as e:
-			#TODO where are we? not separate thread?
-
-			#TODO wtf doesnt get printed in test?
-			#TODO use local custom logger?
-			sys.stderr.write("%s  Failed to connect to beanstalk: %s\n" % (now_formatted(), e))
-			sys.stderr.flush()
-			raise #TODO it does nothing?
-
 	def emit (self, record):
 		d = None
 		try:
-			#patched copypaste https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532
+			#modified copypaste from https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532
+			
 			ei = record.exc_info
 			# self.format(record)
 			if ei:
@@ -63,76 +44,80 @@ class BeanstalkHandler (logging.Handler):
 			d = dict(record.__dict__)
 			d['_source'] = self.source
 			#https://docs.python.org/2/library/logging.html#logrecord-objects
-			#TODO we dont just rewrite msg here for some reason -- what reason? document it, check with tests
 			d['msg_rendered'] = record.getMessage()
-			#  but msg can be obj (see above) so we need to do smth with it
-			#  lets just del it until investigated
+			#  but 'msg' can be obj (see above) so we need to do smth with it
+			#  lets just del it until getting a better idea
 			del d['msg']
 
 			if not self.conn:
 				self._connect()
 
-			# print d['args']
 			d['args'] = None
-			s = cPickle.dumps(d, PICKLE_PROTOCOL)
+
+			s = cPickle.dumps(d, PICKLE_PROTOCOL) #TODO can use marshal here
+			
 			if ei:
 				record.exc_info = ei  #for next handler
 
-			#TODO try catch?
 			_job_id = self.conn.put(s)
 			assert _job_id
 		except (KeyboardInterrupt, SystemExit):
+			self._close_conn()
 			raise
 		except:
-			#writing to beanstalk failed so we just dump out the record and try reconnect next time
-			#TODO try resend? think if it can explode under load
-			#   can use separate thread for retries
-			sys.stderr.write("%s  Failed to send to beanstalk, record: %s\n" % (now_formatted, d or record.__dict__))
-			sys.stderr.flush()
+			#writing to beanstalk failed so we just dump out the record and try to reconnect next time
+
+			self._log("Failed to send this record to beanstalk: %s" % (d or record.__dict__))
 
 			#TODO what happens to the exc? -- seems its being printed like that:
 			# Traceback (most recent call last):
-			#   File "/home/ubuntu/venv/local/lib/python2.7/site-packages/logbeaver/handler.py", line 42, in emit
-			#     self._connect()
-			#   File "/home/ubuntu/venv/local/lib/python2.7/site-packages/logbeaver/handler.py", line 26, in _connect
-			#     self.conn = beanstalkc.Connection(host = self.host, port = self.port, connect_timeout = self.connect_timeout)
-			#   File "/home/ubuntu/venv/local/lib/python2.7/site-packages/beanstalkc.py", line 59, in __init__
-			#     self.connect()
-			#   File "/home/ubuntu/venv/local/lib/python2.7/site-packages/beanstalkc.py", line 65, in connect
-			#     SocketError.wrap(self._socket.connect, (self.host, self.port))
+			# ...
 			#   File "/home/ubuntu/venv/local/lib/python2.7/site-packages/beanstalkc.py", line 43, in wrap
 			#     raise SocketError(err)
 			# SocketError: [Errno 111] Connection refused
 			# Logged from file __init__.py, line 63
 			self.handleError(record)
 
-	#https://docs.python.org/2/library/logging.html#logging.Handler.handleError
-	def handleError(self, record):
+	def _close_conn (self):
 		if self.conn:
 			self.conn.close()
 			self.conn = None
+
+	def _connect (self):
+		try:
+			self.conn = beanstalkc.Connection(host = self.host, port = self.port, connect_timeout = self.connect_timeout)
+
+			# old = self.conn._socket.gettimeout()  #normally None
+			self.conn._socket.settimeout(5) #TODO not documented
+
+			self.conn.use(self.tube)
+		# except beanstalkc.SocketError as e:
+		# 	if e.errno != 111: #Connection refused
+		# 		raise
+		except Exception as e:
+			self._log("Failed to connect to beanstalk: %s" % e)
+			raise
+
+	def _log (self, msg):
+		sys.stderr.write("%s  %s\n" % (now_formatted(), msg))
+		sys.stderr.flush()
+
+	#https://docs.python.org/2/library/logging.html#logging.Handler.handleError
+	def handleError(self, record):
+		self._close_conn()
 		#TODO SocketHandler puts it in 'else', why?
 		logging.Handler.handleError(self, record)
 
 	def close (self):
 		self.acquire()
 		try:
-			if self.conn:
-				self.conn.close()
-				self.conn = None
+			self._close_conn()
 		finally:
 			self.release()
 
 		logging.Handler.close(self)
 
 def log_exc (exc_type, exc_value, exc_tb):
-	# try:
-	# 	#traceback is not included to message so we have to include it by hand (http://hg.python.org/cpython/file/ee879c0ffa11/Lib/logging/__init__.py#l475)
-	# 	text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))#.strip()
-	# finally:
-	# 	del exc_type, exc_value, exc_tb
-	# logging.error(text)
-
 	val = u"%s" % exc_value
 	if val:
 		msg = u"%s: %s" % (exc_type, exc_value)
@@ -176,7 +161,7 @@ class Middleware (object):
 	def response_with_error (self, start_response):
 		body = 'Internal Server Error'
 		start_response('500 Internal Server Error', [
-			('Content-Type', 'text/plain'), #?text/html
+			('Content-Type', 'text/plain'), #TODO text/html?
 			('Content-Length', str(len(body)))
 		])
 		return [body]
@@ -184,7 +169,7 @@ class Middleware (object):
 	def __call__(self, environ, start_response):
 		try:
 			return self.app(environ, start_response)
-		#TODO -- seems no need?
+		#TODO -- seems no need according to the test?
 		# except (pyramid.httpexceptions.WSGIHTTPException,):
 			# raise
 		except:
