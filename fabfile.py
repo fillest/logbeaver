@@ -6,7 +6,7 @@ from contextlib import contextmanager
 
 @task
 def install_bean ():
-	#it's named not just 'beanstalkd' because beanstalkd is run with full fsync, it's global and can conflict with generic setup
+	#it's named not just 'beanstalkd' because beanstalkd is ran with full fsync, it's global and can conflict with generic setup
 	sudo('adduser --system --no-create-home --disabled-login --disabled-password --group logbeaver_beanstalkd || true')
 
 	try:
