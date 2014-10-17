@@ -33,11 +33,12 @@ class QueueProcessor (object):
 				self.logger.warning("Failed to connect to beanstalkd (%s:%s), will retry: %s" % (bean_host, bean_port, e))
 				if self.bean_reconnect_limit:
 					if time.time() - t_start >= self.bean_reconnect_limit:
+						self.logger.error("Reconnect time limit reached")
 						raise
 				time.sleep(self.bean_reconnect_interval)
 
 		# old = self.conn._socket.gettimeout()  #normally None
-		self.conn._socket.settimeout(15) #TODO not documented
+		# self.conn._socket.settimeout(15) #TODO not documented
 		self.conn.watch(bean_tube)
 		if bean_tube != 'default':
 			self.conn.ignore('default')
@@ -120,6 +121,8 @@ def main ():
 	_set_utc_timezone()
 
 	logging.basicConfig(level = logging.INFO, format = '%(asctime)s %(levelname)-5s %(filename)s:%(funcName)s:%(lineno)d  %(message)s')
+	#TODO review
+	logging.getLogger("requests").setLevel(logging.WARNING) #http://stackoverflow.com/questions/11029717/how-do-i-disable-log-messages-from-the-requests-library
 	logging.info("Starting, upstream: %s" % args.upstream_uri)
 
 	q = QueueProcessor(upstream_uri = args.upstream_uri)
