@@ -114,8 +114,9 @@ def sdist ():
 	local('rm -rf dist/')
 	local('python setup.py --quiet sdist')
 
-@hosts(env['package_host'])
+@hosts(env.get('package_host'))
 @task()
 def package ():
+	assert env.get('package_host')
 	execute(sdist)
 	put('dist/logbeaver-*.tar.gz', '~/packages')
