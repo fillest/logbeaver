@@ -114,7 +114,7 @@ def sdist ():
 	local('rm -rf dist/')
 	local('python setup.py --quiet sdist')
 
-@hosts(env.get('package_host'))
+@hosts(env.get('package_host') or [])
 @task()
 def package ():
 	assert env.get('package_host')
