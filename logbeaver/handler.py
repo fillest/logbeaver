@@ -4,6 +4,7 @@ import cPickle
 import sys
 import threading
 import time
+import os
 
 
 PICKLE_PROTOCOL = 2
@@ -25,6 +26,7 @@ class BeanstalkHandler (logging.Handler):
 		self.tube = tube
 		self.connect_timeout = connect_timeout
 
+		self._pid = os.getpid()
 		self.conn = None
 
 	def emit (self, record):
@@ -49,6 +51,11 @@ class BeanstalkHandler (logging.Handler):
 			#  lets just del it until getting a better idea
 			del d['msg']
 
+			#reconnect on fork detection (e.g. gunicorn preload case)
+			pid = os.getpid()
+			if pid != self._pid:
+				self._close_conn()
+				self._pid = pid
 			if not self.conn:
 				self._connect()
 
