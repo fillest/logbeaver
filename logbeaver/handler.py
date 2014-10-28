@@ -124,13 +124,13 @@ class BeanstalkHandler (logging.Handler):
 
 		logging.Handler.close(self)
 
-def log_exc (exc_type, exc_value, exc_tb):
+def log_exc (exc_type, exc_value, exc_tb, extra = None):
 	val = u"%s" % exc_value
 	if val:
 		msg = u"%s: %s" % (exc_type, exc_value)
 	else:
 		msg = u"%s" % exc_type
-	logging.error(msg, exc_info = (exc_type, exc_value, exc_tb))
+	logging.error(msg, exc_info = (exc_type, exc_value, exc_tb), extra = extra)
 
 	del exc_type, exc_value, exc_tb
 
@@ -180,6 +180,10 @@ class Middleware (object):
 		# except (pyramid.httpexceptions.WSGIHTTPException,):
 			# raise
 		except:
-			log_exc(*sys.exc_info())
+			#useless tracebacks really happen (e.g. a view is a class in a lib) so we need request location
+			extra = {}
+			for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
+				extra[k] = environ.get(k)
+			log_exc(*sys.exc_info(), extra = extra)
 
 			return self.response_with_error(start_response)

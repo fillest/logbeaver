@@ -143,7 +143,7 @@ class Test1 (unittest.TestCase):
 		def req_app ():
 			time.sleep(0.1)
 			try:
-				urllib2.urlopen("http://localhost:7325/test").read()
+				urllib2.urlopen("http://localhost:7325/test?test1").read()
 			except urllib2.HTTPError as e:
 				if e.code != 500:
 				# if e.code != 404:
@@ -158,6 +158,9 @@ class Test1 (unittest.TestCase):
 		r = g.next()
 		# print r
 		# self.assertEquals(r['msg'], "%s")
+		self.assertEquals(r['REQUEST_METHOD'], "GET")
+		self.assertEquals(r['PATH_INFO'], "/test")
+		self.assertEquals(r['QUERY_STRING'], "test1")
 		assert "TestException" in r['exc_text'], r
 		assert "test.TestException" in r['msg_rendered'], r
 		# g.next()

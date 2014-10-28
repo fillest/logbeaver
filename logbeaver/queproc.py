@@ -67,6 +67,7 @@ class QueueProcessor (object):
 						#TODO touch and try send again? + limit for tests
 						continue
 				except:
+					self.logger.error("Error (see traceback below) while processing item:\n%s" % data)
 					job.release()
 					raise
 				else:
@@ -86,6 +87,7 @@ class QueueProcessor (object):
 			'host': socket.getfqdn(), #TODO cache?
 			'data': data,
 		}]
+
 
 		body = json.dumps(events)
 		url = self.upstream_uri + '/events/create'

@@ -54,7 +54,7 @@ def upload_queproc ():
 	sdist()
 	with _upload_sdist() as remote:
 		#TODO improve
-		sudo('rm -r /opt/logbeaver_queproc/src/*')
+		sudo('rm -rf /opt/logbeaver_queproc/src/*')
 		sudo('tar xzf %s -C /opt/logbeaver_queproc/src --strip-components=1' % remote, user = 'logbeaver_queproc')
 
 @task
