@@ -37,9 +37,15 @@ class BeanstalkHandler (logging.Handler):
 			ei = record.exc_info
 			# self.format(record)
 			if ei:
-				# just to get traceback text into record.exc_text ...
+				# just to get traceback text into record.exc_text ...  -- to avoid another copypaste
 				_ = self.format(record)
+
+				#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471
+				#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
+				del record.message
+
 				record.exc_info = None  # to avoid Unpickleable error
+
 			# See issue #14436: If msg or args are objects, they may not be
 			# available on the receiving end. So we convert the msg % args
 			# to a string, save it as msg and zap the args.
@@ -61,7 +67,7 @@ class BeanstalkHandler (logging.Handler):
 
 			d['args'] = None
 
-			s = cPickle.dumps(d, PICKLE_PROTOCOL) #TODO can use marshal here
+			s = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
 			if ei:
 				record.exc_info = ei  #for next handler

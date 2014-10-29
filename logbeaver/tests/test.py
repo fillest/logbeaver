@@ -212,10 +212,25 @@ class Test1 (unittest.TestCase):
 		r = g.next()
 		# print r
 
+
+		try:
+			1 / 0
+		except:
+			logging.exception('binary\xb3\xc6\xcd\xa4\x04\x10\xbd\xf0\x99W\xc3\x88A\xaa>\x1c\xfastuff')
+
+		r = g.next()
+
+		self.assertIn("binary", r['msg_rendered'])
+		self.assertIn("stuff", r['msg_rendered'])
+		assert "ZeroDivisionError" in r['exc_text'], r
+
+		
+		#TODO unit test for "stop logmill, start test, start logmill"
+
+
 		self.assertEquals(p.clear_queue(), 0)
 
-		#TODO unit test for "stop logmill, start test, start logmill"
-		
+
 
 
 
