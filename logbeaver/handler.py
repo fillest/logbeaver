@@ -11,10 +11,9 @@ PICKLE_PROTOCOL = 2
 
 
 def now_formatted ():
-	return time.strftime("%Y-%m-%d %H:%M:%SUTC", time.gmtime())
+	return time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime())
 
-#https://docs.python.org/2/library/logging.html#handler-objects
-#https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432
+#https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432 (SocketHandler)
 class BeanstalkHandler (logging.Handler):
 	def __init__ (self, source = 'test', tube = 'logbeaver', host = 'localhost', port = 11301,  #port is default + 1
 	              connect_timeout = 3, level = logging.NOTSET):
@@ -32,7 +31,7 @@ class BeanstalkHandler (logging.Handler):
 	def emit (self, record):
 		d = None
 		try:
-			#modified copypaste from https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532
+			#modified copypaste from https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532 (makePickle)
 			
 			ei = record.exc_info
 			# self.format(record)
@@ -40,7 +39,7 @@ class BeanstalkHandler (logging.Handler):
 				# just to get traceback text into record.exc_text ...  -- to avoid another copypaste
 				_ = self.format(record)
 
-				#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471
+				#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
 				#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
 				del record.message
 
@@ -67,20 +66,21 @@ class BeanstalkHandler (logging.Handler):
 
 			d['args'] = None
 
-			s = cPickle.dumps(d, PICKLE_PROTOCOL)
+			serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
 			if ei:
 				record.exc_info = ei  #for next handler
 
-			_job_id = self.conn.put(s)
-			assert _job_id
+			_job_id = self.conn.put(serialized)
+			if not _job_id:
+				raise Exception("failed to put to beanstalkd")
 		except (KeyboardInterrupt, SystemExit):
 			self._close_conn()
 			raise
 		except:
-			#writing to beanstalk failed so we just dump out the record and try to reconnect next time
-
-			self._log("Failed to send this record to beanstalk: %s" % (d or record.__dict__))
+			#so putting to beanstalk failed and it may be too expensive to continue resending so
+			#we just print the record and try to reconnect next time
+			self._log("Logbeaver warning: failed to put this log record to beanstalkd: %s" % (d or record.__dict__))
 
 			#TODO what happens to the exc? -- seems its being printed like that:
 			# Traceback (most recent call last):
@@ -108,10 +108,11 @@ class BeanstalkHandler (logging.Handler):
 		# 	if e.errno != 111: #Connection refused
 		# 		raise
 		except Exception as e:
-			self._log("Failed to connect to beanstalk: %s" % e)
+			self._log("Logbeaver warning: failed to connect to beanstalkd: %s" % e)
 			raise
 
 	def _log (self, msg):
+		#TODO use custom logger?
 		sys.stderr.write("%s  %s\n" % (now_formatted(), msg))
 		sys.stderr.flush()
 
@@ -172,21 +173,19 @@ class Middleware (object):
 		self.app = application
 
 	def response_with_error (self, start_response):
-		body = 'Internal Server Error'
+		body_text = 'Internal Server Error'
 		start_response('500 Internal Server Error', [
-			('Content-Type', 'text/plain'), #TODO text/html?
-			('Content-Length', str(len(body)))
+			('Content-Type', 'text/plain'),
+			('Content-Length', str(len(body_text)))
 		])
-		return [body]
+		return [body_text]
 
 	def __call__(self, environ, start_response):
 		try:
 			return self.app(environ, start_response)
-		#TODO -- seems no need according to the test?
-		# except (pyramid.httpexceptions.WSGIHTTPException,):
-			# raise
 		except:
-			#useless tracebacks really happen (e.g. a view is a class in a lib) so we need request location
+			#request location happens to be useful anyway but mainly because we can get
+			#unhelpful tracebacks (e.g. a view is a generic class in a lib)
 			extra = {}
 			for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
 				extra[k] = environ.get(k)
