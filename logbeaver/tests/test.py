@@ -107,6 +107,8 @@ class Test1 (unittest.TestCase):
 
 		warnings.warn("test2")
 
+		logging.error("test3")
+
 
 		r = g.next()
 		# print r
@@ -119,6 +121,9 @@ class Test1 (unittest.TestCase):
 		# self.assertEquals(r['msg'], "%s")
 		assert "test2" in r['msg_rendered'], r
 		# g.next()
+
+		r = g.next()
+		assert "test3" in r['msg_rendered'], r
 
 		# print p.conn.stats()
 

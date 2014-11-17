@@ -148,6 +148,7 @@ def _parse_args ():
 	parser.add_argument('upstream_uri', help = "e.g. http://localhost:6543")
 	parser.add_argument('--inspect', '-i', action = 'store_true', help = "inspect the queue and exit")
 	parser.add_argument('--delete', '-d', type = int, help = "delete a job by id and exit")
+	parser.add_argument('--clear', '-c', action = 'store_true', help = "delete all jobs and exit")
 	return parser.parse_args()
 
 def _set_utc_timezone ():
@@ -170,6 +171,9 @@ def main ():
 		q.inspect()
 	elif args.delete:
 		q.delete(args.delete)
+	elif args.clear:
+		n = q.clear_queue()
+		logging.info("Deleted %s jobs" % n)
 	else:
 		for _ in q.run_loop():
 			pass
