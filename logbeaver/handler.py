@@ -1,10 +1,11 @@
 import logging
-import beanstalkc
 import cPickle
 import sys
 import threading
 import time
 import os
+from pyramid.threadlocal import get_current_request
+import beanstalkc
 
 
 PICKLE_PROTOCOL = 2
@@ -31,30 +32,25 @@ class BeanstalkHandler (logging.Handler):
 	def emit (self, record):
 		d = None
 		try:
-			#modified copypaste from https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532 (makePickle)
-			
-			ei = record.exc_info
-			# self.format(record)
-			if ei:
-				# just to get traceback text into record.exc_text ...  -- to avoid another copypaste
-				_ = self.format(record)
+			#inspired by https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532 (makePickle)
 
-				#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
-				#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
-				del record.message
+			#if there's another handler like console, it can call .format and record can be already mutated
+			_ = self.format(record)
 
-				record.exc_info = None  # to avoid Unpickleable error
-
-			# See issue #14436: If msg or args are objects, they may not be
-			# available on the receiving end. So we convert the msg % args
-			# to a string, save it as msg and zap the args.
-			d = dict(record.__dict__)
+			d = record.__dict__.copy()
 			d['_source'] = self.source
-			#https://docs.python.org/2/library/logging.html#logrecord-objects
-			d['msg_rendered'] = record.getMessage()
-			#  but 'msg' can be obj (see above) so we need to do smth with it
-			#  lets just del it until getting a better idea
+			#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
+			#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
+			del d['message']
+			del d['exc_info']  #unpickleable
+			d['msg_rendered'] = record.getMessage()  #https://docs.python.org/2/library/logging.html#logrecord-objects
+			#msg and args can be unpickleable
 			del d['msg']
+			del d['args']
+			
+			request = get_current_request()
+			if request:
+				d.update(get_path_params(request.environ)) 
 
 			#reconnect on fork detection (e.g. gunicorn preload case)
 			pid = os.getpid()
@@ -64,12 +60,49 @@ class BeanstalkHandler (logging.Handler):
 			if not self.conn:
 				self._connect()
 
-			d['args'] = None
-
 			serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
-			if ei:
-				record.exc_info = ei  #for next handler
+
+
+			# ei = record.exc_info
+			# # self.format(record)
+			# if ei:
+			# 	# just to get traceback text into record.exc_text ...  -- to avoid another copypaste
+			# 	_ = self.format(record)
+
+			# 	#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
+			# 	#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
+			# 	del record.message
+
+			# 	record.exc_info = None  # to avoid Unpickleable error
+
+			# # See issue #14436: If msg or args are objects, they may not be
+			# # available on the receiving end. So we convert the msg % args
+			# # to a string, save it as msg and zap the args.
+			# d = dict(record.__dict__)
+			# d['_source'] = self.source
+			# #https://docs.python.org/2/library/logging.html#logrecord-objects
+			# d['msg_rendered'] = record.getMessage()
+			# #  but 'msg' can be obj (see above) so we need to do smth with it
+			# #  lets just del it until getting a better idea
+			# del d['msg']
+
+			# #reconnect on fork detection (e.g. gunicorn preload case)
+			# pid = os.getpid()
+			# if pid != self._pid:
+			# 	self._close_conn()
+			# 	self._pid = pid
+			# if not self.conn:
+			# 	self._connect()
+
+			# d['args'] = None
+
+			# serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
+			
+			# if ei:
+			# 	record.exc_info = ei  #for next handler
+
+
 
 			_job_id = self.conn.put(serialized)
 			if not _job_id:
@@ -167,6 +200,14 @@ def patch_everything ():
 		self.run = run_with_excepthook
 	threading.Thread.__init__ = init
 
+def get_path_params (environ):
+	#request location happens to be useful anyway but mainly because we can get
+	#unhelpful tracebacks (e.g. a view is a generic class in a lib)
+	extra = {}
+	for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
+		extra[k] = environ.get(k)
+	return extra
+
 #https://github.com/Pylons/pyramid_exclog/blob/master/pyramid_exclog/__init__.py
 class Middleware (object):
 	def __init__(self, application):
@@ -184,11 +225,7 @@ class Middleware (object):
 		try:
 			return self.app(environ, start_response)
 		except:
-			#request location happens to be useful anyway but mainly because we can get
-			#unhelpful tracebacks (e.g. a view is a generic class in a lib)
-			extra = {}
-			for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
-				extra[k] = environ.get(k)
+			extra = get_path_params(environ)
 			log_exc(*sys.exc_info(), extra = extra)
 
 			return self.response_with_error(start_response)

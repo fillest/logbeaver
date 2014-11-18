@@ -46,6 +46,7 @@ class Test1 (unittest.TestCase):
 		def raise_exc_view (request):
 			raise TestException()
 		def raise_404 (request):
+			logging.warn("test123")
 			# from pyramid.httpexceptions import exception_response; raise exception_response(404)
 			from pyramid.httpexceptions import HTTPNotFound; raise HTTPNotFound()
 		config.add_view(raise_exc_view, route_name='test', renderer = 'string')
@@ -185,7 +186,11 @@ class Test1 (unittest.TestCase):
 
 		server.handle_request()
 
-		# r = g.next()
+		r = g.next()
+		self.assertEquals(r['REQUEST_METHOD'], "GET")
+		self.assertEquals(r['PATH_INFO'], "/test1")
+		self.assertEquals(r['QUERY_STRING'], "")
+		self.assertEquals(r['msg_rendered'], "test123")
 
 		self.assertEquals(p.clear_queue(), 0)
 
@@ -224,6 +229,7 @@ class Test1 (unittest.TestCase):
 			logging.exception('binary\xb3\xc6\xcd\xa4\x04\x10\xbd\xf0\x99W\xc3\x88A\xaa>\x1c\xfastuff')
 
 		r = g.next()
+		# print r
 
 		self.assertIn("binary", r['msg_rendered'])
 		self.assertIn("stuff", r['msg_rendered'])
