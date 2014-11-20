@@ -235,7 +235,14 @@ class Test1 (unittest.TestCase):
 		self.assertIn("stuff", r['msg_rendered'])
 		assert "ZeroDivisionError" in r['exc_text'], r
 
+
+		logging.info("test %s" % u'тест')
+
+		r = g.next()
+		self.assertIn("test", r['msg_rendered'])
+		self.assertIn(u"тест", r['msg_rendered'])
 		
+
 		#TODO unit test for "stop logmill, start test, start logmill"
 
 

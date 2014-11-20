@@ -90,7 +90,8 @@ class QueueProcessor (object):
 					#there should be no raw binary data in msg, because json, postgres and other stuff expect unicode and
 					#it's unreadable anyway so we enforce unicode decoding. Run your binary data through base64 for example
 					#TODO document it
-					record['msg_rendered'] = record['msg_rendered'].decode('utf-8', 'replace')
+					if not isinstance(record['msg_rendered'], unicode):
+						record['msg_rendered'] = record['msg_rendered'].decode('utf-8', 'replace')
 
 					if not self._send(record, reraise_on_error):
 						job.release()
