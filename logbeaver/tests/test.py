@@ -257,6 +257,29 @@ class Test1 (unittest.TestCase):
 		#TODO unit test for "stop logmill, start test, start logmill"
 
 
+		def req_app1 ():
+			time.sleep(0.1)
+			try:
+				urllib2.urlopen("http://localhost:7325/test1?qwe=Operatciya_A\xabTajfunA\xbb.html&a=1&a=2&b=3").read()
+			except urllib2.HTTPError as e:
+				if e.code != 404:
+					raise
+				add_success(3)
+		thr = threading.Thread(target = req_app1)
+		# thr.daemon = True
+		thr.start()
+
+		server.handle_request()
+
+		r = g.next()
+		self.assertEquals(r['REQUEST_METHOD'], "GET")
+		self.assertEquals(r['PATH_INFO'], "/test1")
+		self.assertIn("Operatciya", r['QUERY_STRING'])
+		self.assertIn("Tajfun", r['QUERY_STRING'])
+		self.assertEquals(r['message'], "test123")
+
+
+
 		self.assertEquals(p.clear_queue(), 0)
 
 

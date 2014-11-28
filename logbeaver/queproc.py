@@ -96,6 +96,10 @@ class QueueProcessor (object):
 					msg = record.get('msg')
 					if msg and not isinstance(msg, unicode):
 						record['msg'] = msg.decode('utf-8', 'replace')
+					#TODO document or show a note that it's lossy
+					qs = record.get('QUERY_STRING')
+					if qs:
+						record['QUERY_STRING'] = qs.decode('utf-8', 'replace')
 
 					if not self._send(record, reraise_on_error):
 						job.release()
