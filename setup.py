@@ -9,7 +9,7 @@ requirements = [
 
 setup(
     name='logbeaver',
-    version='0.1.19',
+    version='0.2.0',
     classifiers=[
       "Programming Language :: Python",
       ],
