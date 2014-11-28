@@ -4,8 +4,8 @@ import sys
 import threading
 import time
 import os
-from pyramid.threadlocal import get_current_request
 import beanstalkc
+from pyramid.threadlocal import get_current_request
 
 
 PICKLE_PROTOCOL = 2
@@ -35,17 +35,22 @@ class BeanstalkHandler (logging.Handler):
 			#inspired by https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532 (makePickle)
 
 			#if there's another handler like console, it can call .format and record can be already mutated
+			#Also this gets traceback text into record.exc_text
 			_ = self.format(record)
 
 			d = record.__dict__.copy()
 			d['_source'] = self.source
-			#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
-			#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
-			del d['message']
 			del d['exc_info']  #unpickleable
-			d['msg_rendered'] = record.getMessage()  #https://docs.python.org/2/library/logging.html#logrecord-objects
+			#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
+			#and we overwrite it anyway
+			d['message'] = record.getMessage()  #https://docs.python.org/2/library/logging.html#logrecord-objects
 			#msg and args can be unpickleable
-			del d['msg']
+			if isinstance(d['msg'], basestring):
+				#py.warnings logger does this and people can too
+				if d['msg'] == '%s':
+					del d['msg']
+			else:
+				del d['msg']
 			del d['args']
 			
 			request = get_current_request()
@@ -62,48 +67,6 @@ class BeanstalkHandler (logging.Handler):
 
 			serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
-
-
-			# ei = record.exc_info
-			# # self.format(record)
-			# if ei:
-			# 	# just to get traceback text into record.exc_text ...  -- to avoid another copypaste
-			# 	_ = self.format(record)
-
-			# 	#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
-			# 	#.message is a duplicate here + can contain binary data which we filter only in msg_rendered (see queproc tests)
-			# 	del record.message
-
-			# 	record.exc_info = None  # to avoid Unpickleable error
-
-			# # See issue #14436: If msg or args are objects, they may not be
-			# # available on the receiving end. So we convert the msg % args
-			# # to a string, save it as msg and zap the args.
-			# d = dict(record.__dict__)
-			# d['_source'] = self.source
-			# #https://docs.python.org/2/library/logging.html#logrecord-objects
-			# d['msg_rendered'] = record.getMessage()
-			# #  but 'msg' can be obj (see above) so we need to do smth with it
-			# #  lets just del it until getting a better idea
-			# del d['msg']
-
-			# #reconnect on fork detection (e.g. gunicorn preload case)
-			# pid = os.getpid()
-			# if pid != self._pid:
-			# 	self._close_conn()
-			# 	self._pid = pid
-			# if not self.conn:
-			# 	self._connect()
-
-			# d['args'] = None
-
-			# serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
-			
-			# if ei:
-			# 	record.exc_info = ei  #for next handler
-
-
-
 			_job_id = self.conn.put(serialized)
 			if not _job_id:
 				raise Exception("failed to put to beanstalkd")

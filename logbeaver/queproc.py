@@ -87,11 +87,15 @@ class QueueProcessor (object):
 				record = None
 				try:
 					record = cPickle.loads(serialized)
-					#there should be no raw binary data in msg, because json, postgres and other stuff expect unicode and
-					#it's unreadable anyway so we enforce unicode decoding. Run your binary data through base64 for example
+					#there should be no raw binary data in msgs, because json, postgres etc. expect unicode and
+					#it's unreadable anyway so we enforce lossy unicode decoding.
+					#If you want to log binary data, use e.g. base64 or hex.
 					#TODO document it
-					if not isinstance(record['msg_rendered'], unicode):
-						record['msg_rendered'] = record['msg_rendered'].decode('utf-8', 'replace')
+					if not isinstance(record['message'], unicode):
+						record['message'] = record['message'].decode('utf-8', 'replace')
+					msg = record.get('msg')
+					if msg and not isinstance(msg, unicode):
+						record['msg'] = msg.decode('utf-8', 'replace')
 
 					if not self._send(record, reraise_on_error):
 						job.release()

@@ -103,28 +103,32 @@ class Test1 (unittest.TestCase):
 
 		# with capture_stderr() as out:
 		# 	logging.warn("tessst")
-		logging.warn("test1")
+		logging.warn("test%s", 1)
 		# print out
 
 		warnings.warn("test2")
 
-		logging.error("test3")
+		logging.error("test%s", 3)
+
+		logging.info({})
 
 
 		r = g.next()
-		# print r
-		# self.assertEquals(r['msg'], "test1")
-		self.assertEquals(r['msg_rendered'], "test1")
-		# g.next()
+		self.assertEquals(r['message'], "test1")
+		self.assertEquals(r['msg'], "test%s")
 
 		r = g.next()
-		# print r
 		# self.assertEquals(r['msg'], "%s")
-		assert "test2" in r['msg_rendered'], r
-		# g.next()
+		self.assertNotIn('msg', r)
+		self.assertIn("test2", r['message'])
 
 		r = g.next()
-		assert "test3" in r['msg_rendered'], r
+		self.assertEquals(r['message'], "test3")
+
+		r = g.next()
+		self.assertNotIn('msg', r)
+		self.assertIn("{}", r['message'])
+
 
 		# print p.conn.stats()
 
@@ -139,10 +143,8 @@ class Test1 (unittest.TestCase):
 		time.sleep(0.05)
 
 		r = g.next()
-		# print r
 		# self.assertEquals(r['msg'], "%s")
 		assert "TestException" in r['exc_text'], r
-		# g.next()
 
 
 
@@ -168,7 +170,7 @@ class Test1 (unittest.TestCase):
 		self.assertEquals(r['PATH_INFO'], "/test")
 		self.assertEquals(r['QUERY_STRING'], "test1")
 		assert "TestException" in r['exc_text'], r
-		assert "test.TestException" in r['msg_rendered'], r
+		assert "test.TestException" in r['message'], r
 		# g.next()
 
 
@@ -190,7 +192,7 @@ class Test1 (unittest.TestCase):
 		self.assertEquals(r['REQUEST_METHOD'], "GET")
 		self.assertEquals(r['PATH_INFO'], "/test1")
 		self.assertEquals(r['QUERY_STRING'], "")
-		self.assertEquals(r['msg_rendered'], "test123")
+		self.assertEquals(r['message'], "test123")
 
 		self.assertEquals(p.clear_queue(), 0)
 
@@ -202,7 +204,7 @@ class Test1 (unittest.TestCase):
 
 		r = g.next()
 		# print r
-		self.assertEquals(r['msg_rendered'], "test")
+		self.assertEquals(r['message'], "test")
 		assert "ZeroDivisionError" in r['exc_text'], r
 		# g.next()
 
@@ -231,17 +233,26 @@ class Test1 (unittest.TestCase):
 		r = g.next()
 		# print r
 
-		self.assertIn("binary", r['msg_rendered'])
-		self.assertIn("stuff", r['msg_rendered'])
-		assert "ZeroDivisionError" in r['exc_text'], r
+		self.assertIn("binary", r['message'])
+		self.assertIn("stuff", r['message'])
+		self.assertIn("ZeroDivisionError", r['exc_text'])
 
 
 		logging.info("test %s" % u'тест')
 
 		r = g.next()
-		self.assertIn("test", r['msg_rendered'])
-		self.assertIn(u"тест", r['msg_rendered'])
-		
+		self.assertIn("test", r['message'])
+		self.assertIn(u"тест", r['message'])
+
+		logging.info("test %s", 1)
+		logging.info("test %(test)s", {'test': 2})
+
+		r = g.next()
+		self.assertEquals(r['message'], "test 1")
+		self.assertEquals(r['msg'], "test %s")
+		r = g.next()
+		self.assertEquals(r['message'], "test 2")
+		self.assertEquals(r['msg'], "test %(test)s")
 
 		#TODO unit test for "stop logmill, start test, start logmill"
 
