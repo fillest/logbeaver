@@ -144,10 +144,10 @@ class QueueProcessor (object):
 				return False
 
 		if resp.status_code != 200:
-			self.logger.warning("unexpected response status: %s" % resp.status_code)
+			self.logger.warning("upstream server responded with error, status=%s, body: %s, request data: %s" % (resp.status_code, resp.text, events))
 			return False
-		if resp.text != 'ok':
-			self.logger.warning("unexpected response text:%s" % resp.text)
+		if not json.loads(resp.text)['ok']:
+			self.logger.warning("unexpected upstream server response: %s" % resp.text)
 			return False
 
 		return True

@@ -9,7 +9,7 @@ requirements = [
 
 setup(
     name='logbeaver',
-    version='0.2.0',
+    version='0.4.1',
     classifiers=[
       "Programming Language :: Python",
       ],
@@ -17,4 +17,8 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=requirements,
+    entry_points="""\
+        [console_scripts]
+          logbeaver_queproc = logbeaver.queproc:main
+    """,
 )

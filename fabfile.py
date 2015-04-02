@@ -69,7 +69,6 @@ def deploy_queproc ():
 	execute(upload_queproc)
 	execute(upgrade_queproc)
 	sudo('supervisorctl update')
-	# sudo('supervisorctl restart logbeaver_queproc')
 	sudo('supervisorctl start logbeaver_queproc')
 	execute(check_running_queproc)
 

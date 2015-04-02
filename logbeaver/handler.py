@@ -3,6 +3,7 @@ import cPickle
 import sys
 import threading
 import time
+import traceback
 import os
 import beanstalkc
 from pyramid.threadlocal import get_current_request
@@ -12,7 +13,7 @@ PICKLE_PROTOCOL = 2
 
 
 def now_formatted ():
-	return time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime())
+	return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
 
 #https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432 (SocketHandler)
 class BeanstalkHandler (logging.Handler):
@@ -60,6 +61,7 @@ class BeanstalkHandler (logging.Handler):
 			#reconnect on fork detection (e.g. gunicorn preload case)
 			pid = os.getpid()
 			if pid != self._pid:
+				# self._log("Logbeaver info: pid has changed, reconnecting")
 				self._close_conn()
 				self._pid = pid
 			if not self.conn:
@@ -133,35 +135,41 @@ def log_exc (exc_type, exc_value, exc_tb, extra = None):
 		msg = u"%s: %s" % (exc_type, exc_value)
 	else:
 		msg = u"%s" % exc_type
+
 	logging.error(msg, exc_info = (exc_type, exc_value, exc_tb), extra = extra)
 
 	del exc_type, exc_value, exc_tb
 
-def patch_everything ():
-	#warnings don't use logging by default
-	logging.captureWarnings(True)
+def patch_everything (change_warnings = True, change_excepthook = True, change_threading = True, log_thread_trace = True):
+	if change_warnings:
+		#warnings don't use logging by default
+		logging.captureWarnings(True)
 
-	#default sys.excepthook doesn't use logging
-	sys.excepthook = log_exc
+	if change_excepthook:
+		#default sys.excepthook doesn't use logging
+		sys.excepthook = log_exc
 
-	#for extra fun, threading doesn't use sys.excepthook (http://bugs.python.org/issue1230540)
-	init_old = threading.Thread.__init__
-	def init(self, *args, **kwargs):
-		init_old(self, *args, **kwargs)
-		
-		run_old = self.run
-		def run_with_excepthook(*args, **kw):
-			try:
-				run_old(*args, **kw)
-			except (KeyboardInterrupt, SystemExit):
-				raise
-			except:
-				if sys:  #http://hg.python.org/cpython/file/ee879c0ffa11/Lib/threading.py#l817
-					sys.excepthook(*sys.exc_info())
-				else:
+	if change_threading:
+		#threading doesn't use sys.excepthook (http://bugs.python.org/issue1230540)
+		init_orig = threading.Thread.__init__
+		def init(self, *args, **kwargs):
+			init_orig(self, *args, **kwargs)
+
+			extra = {'_thread_creation_stack_trace': ''.join(traceback.format_stack())} if log_thread_trace else None
+			
+			run_orig = self.run
+			def run_with_excepthook(*args, **kwargs):
+				try:
+					run_orig(*args, **kwargs)
+				except (KeyboardInterrupt, SystemExit):
 					raise
-		self.run = run_with_excepthook
-	threading.Thread.__init__ = init
+				except:
+					if sys:  #apparently sys can be gone ("most likely from interpreter shutdown" - Lib/threading.py)
+						sys.excepthook(*sys.exc_info(), extra = extra)
+					else:
+						raise
+			self.run = run_with_excepthook
+		threading.Thread.__init__ = init
 
 def get_path_params (environ):
 	#request location happens to be useful anyway but mainly because we can get
