@@ -59,17 +59,21 @@ class BeanstalkHandler (logging.Handler):
 				d.update(get_path_params(request.environ)) 
 
 			#reconnect on fork detection (e.g. gunicorn preload case)
-			pid = os.getpid()
-			if pid != self._pid:
-				# self._log("Logbeaver info: pid has changed, reconnecting")
-				self._close_conn()
-				self._pid = pid
+			cur_pid = os.getpid()
+			# self._log("pid1 %s", cur_pid)
+			if self._pid != cur_pid:
+				# self._log("Logbeaver info: detected pid change (%s -> %s), reconnecting", self._pid, cur_pid)
+				self._close_conn(hard = True)
+				self._pid = cur_pid
 			if not self.conn:
 				self._connect()
 
+			# print '************', d['message']
 			serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
+			# self._log("pid2 %s", cur_pid)
 			_job_id = self.conn.put(serialized)
+			# self._log("***** jid %s", _job_id)
 			if not _job_id:
 				raise Exception("failed to put to beanstalkd")
 		except (KeyboardInterrupt, SystemExit):
@@ -78,7 +82,7 @@ class BeanstalkHandler (logging.Handler):
 		except:
 			#so putting to beanstalk failed and it may be too expensive to continue resending so
 			#we just print the record and try to reconnect next time
-			self._log("Logbeaver warning: failed to put this log record to beanstalkd: %s" % (d or record.__dict__))
+			self._log("Logbeaver warning: failed to put this log record to beanstalkd: %s", d or record.__dict__)
 
 			#TODO what happens to the exc? -- seems its being printed like that:
 			# Traceback (most recent call last):
@@ -89,9 +93,12 @@ class BeanstalkHandler (logging.Handler):
 			# Logged from file __init__.py, line 63
 			self.handleError(record)
 
-	def _close_conn (self):
+	def _close_conn (self, hard = False):
 		if self.conn:
-			self.conn.close()
+			if hard:
+				self.conn._socket.close()  #TODO not documented
+			else:
+				self.conn.close()
 			self.conn = None
 
 	def _connect (self):
@@ -106,12 +113,13 @@ class BeanstalkHandler (logging.Handler):
 		# 	if e.errno != 111: #Connection refused
 		# 		raise
 		except Exception as e:
-			self._log("Logbeaver warning: failed to connect to beanstalkd: %s" % e)
+			self._log("Logbeaver warning: failed to connect to beanstalkd: %s", e)
+			#TODO is it safe to raise here? - document it
 			raise
 
-	def _log (self, msg):
+	def _log (self, msg, *args):
 		#TODO use custom logger?
-		sys.stderr.write("%s  %s\n" % (now_formatted(), msg))
+		sys.stderr.write("%s  %s\n" % (now_formatted(), msg % args))
 		sys.stderr.flush()
 
 	#https://docs.python.org/2/library/logging.html#logging.Handler.handleError
