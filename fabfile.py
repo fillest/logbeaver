@@ -55,12 +55,13 @@ def upload_queproc ():
 	with _upload_sdist() as remote:
 		#TODO improve
 		sudo('rm -rf /opt/logbeaver_queproc/src/*')
+		sudo('mkdir -p /opt/logbeaver_queproc/src', user = 'logbeaver_queproc') #TODO ? tar doesn't create the dir
 		sudo('tar xzf %s -C /opt/logbeaver_queproc/src --strip-components=1' % remote, user = 'logbeaver_queproc')
 
 @task
 def upgrade_queproc ():
 	with cd('/opt/logbeaver_queproc/src'):
-		sudo('../venv/bin/pip install -r requirements_queproc.txt')
+		sudo('../venv/bin/pip install -r logbeaver/requirements_queproc.txt')
 		sudo('../venv/bin/pip install -e .')
 
 @task
