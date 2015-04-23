@@ -96,7 +96,7 @@ class BeanstalkHandler (logging.Handler):
 	def _close_conn (self, hard = False):
 		if self.conn:
 			if hard:
-				self.conn._socket.close()  #TODO not documented
+				self.conn._socket.close()  #TODO not documented.  https://github.com/earl/beanstalkc/blob/master/beanstalkc.py#L75
 			else:
 				self.conn.close()
 			self.conn = None
