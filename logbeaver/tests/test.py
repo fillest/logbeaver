@@ -90,8 +90,8 @@ class Test1 (unittest.TestCase):
 		handler.patch_everything()
 
 		hook = sys.excepthook
-		def for_test (*args):
-			hook(*args)
+		def for_test (*args, **kwargs):
+			hook(*args, **kwargs)
 			add_success(1)
 		sys.excepthook = for_test
 		
@@ -541,98 +541,98 @@ class Test1 (unittest.TestCase):
 # 		finally:
 # 			os.remove(path)
 
-def init_db (conn):
-	#TODO how big can integer be? think about several gb files
-	conn.execute("""create table if not exists file_positions (
-		file_path		text NOT NULL primary key,
-		position 		integer NOT NULL
-	);
-	""")
-	conn.commit()
-	conn.close()
+# def init_db (conn):
+# 	#TODO how big can integer be? think about several gb files
+# 	conn.execute("""create table if not exists file_positions (
+# 		file_path		text NOT NULL primary key,
+# 		position 		integer NOT NULL
+# 	);
+# 	""")
+# 	conn.commit()
+# 	conn.close()
 
-def fetch_pos (path, conn):
-	res = conn.execute("""
-		select position
-		from file_positions
-		where file_path = ?
-	""", [path]).fetchone()
+# def fetch_pos (path, conn):
+# 	res = conn.execute("""
+# 		select position
+# 		from file_positions
+# 		where file_path = ?
+# 	""", [path]).fetchone()
 
-	if res is None:
-		with conn:
-			conn.execute("insert into file_positions (file_path, position) values (?, ?)", (path, 0))
-		return 0
-	else:
-		return res[0]
+# 	if res is None:
+# 		with conn:
+# 			conn.execute("insert into file_positions (file_path, position) values (?, ?)", (path, 0))
+# 		return 0
+# 	else:
+# 		return res[0]
 
-def tail_msgs (fd, start_pos, retry_interval = 0.5):
-	while True:
-		for next_pos, msg in fetch_msgs(fd, start_pos):
-			if next_pos is None:
-				time.sleep(retry_interval)
-			else:
-				start_pos = next_pos
-				yield next_pos, msg
+# def tail_msgs (fd, start_pos, retry_interval = 0.5):
+# 	while True:
+# 		for next_pos, msg in fetch_msgs(fd, start_pos):
+# 			if next_pos is None:
+# 				time.sleep(retry_interval)
+# 			else:
+# 				start_pos = next_pos
+# 				yield next_pos, msg
 
-def fetch_msgs (fd, start_pos):
-	msg_read_num_last = 0
+# def fetch_msgs (fd, start_pos):
+# 	msg_read_num_last = 0
 
-	while True:
-		real_pos = os.lseek(fd, start_pos, os.SEEK_SET)
-		assert real_pos == start_pos, (start_pos, real_pos)
+# 	while True:
+# 		real_pos = os.lseek(fd, start_pos, os.SEEK_SET)
+# 		assert real_pos == start_pos, (start_pos, real_pos)
 
-		#TODO if size is not long enough, can stuck in infinite loop
-		# read_size = 1024
-		read_size = 1024 + 400
-		chunk = os.read(fd, read_size)
-		if not chunk: #eof
-			# print "eof"
-			yield None, None
-			return
-		# print "#######", len(chunk), chunk
+# 		#TODO if size is not long enough, can stuck in infinite loop
+# 		# read_size = 1024
+# 		read_size = 1024 + 400
+# 		chunk = os.read(fd, read_size)
+# 		if not chunk: #eof
+# 			# print "eof"
+# 			yield None, None
+# 			return
+# 		# print "#######", len(chunk), chunk
 
-		pos = 0
-		msg_parsed_num = 0
+# 		pos = 0
+# 		msg_parsed_num = 0
 
-		# print "_"*100
-		while True:
-			maybe_start = chunk[pos:pos+len('$${')]
-			if not maybe_start:
-				break
-			#TODO parse the stuff here, it can be caused by print
-			assert maybe_start == '$${', repr(maybe_start)
+# 		# print "_"*100
+# 		while True:
+# 			maybe_start = chunk[pos:pos+len('$${')]
+# 			if not maybe_start:
+# 				break
+# 			#TODO parse the stuff here, it can be caused by print
+# 			assert maybe_start == '$${', repr(maybe_start)
 
-			i = chunk.find('}$$', pos)
-			if i == -1:
-				break
+# 			i = chunk.find('}$$', pos)
+# 			if i == -1:
+# 				break
 
-			msg_parsed_num += 1
+# 			msg_parsed_num += 1
 
-			msg = chunk[pos:i]
-			# print "@@@@", msg#.strip()
+# 			msg = chunk[pos:i]
+# 			# print "@@@@", msg#.strip()
 
-			# pos = i + len('}$$')
-			# pos = i + len('}$$\n')
-			assert chunk[i:i+len('}$$\n')] == '}$$\n', repr(chunk[i:i+len('}$$\n')])
-			pos = i + len('}$$\n')
+# 			# pos = i + len('}$$')
+# 			# pos = i + len('}$$\n')
+# 			assert chunk[i:i+len('}$$\n')] == '}$$\n', repr(chunk[i:i+len('}$$\n')])
+# 			pos = i + len('}$$\n')
 
-			yield start_pos + pos, msg#.strip()
+# 			yield start_pos + pos, msg#.strip()
 
-			# # assert chunk[pos:pos+len('\n$${')] == '\n$${', repr(chunk[pos:pos+len('\n$${')])
-			# assert chunk[pos:pos+len('\n')] == '\n', repr(chunk[pos:pos+len('\n')])
-			# # pos += len('\n$${')
-			# pos += len('\n')
+# 			# # assert chunk[pos:pos+len('\n$${')] == '\n$${', repr(chunk[pos:pos+len('\n$${')])
+# 			# assert chunk[pos:pos+len('\n')] == '\n', repr(chunk[pos:pos+len('\n')])
+# 			# # pos += len('\n$${')
+# 			# pos += len('\n')
 
-		# left_data = chunk[pos:]
-		#if left_data
-			#TODO data can stuck here forever if disk is full; also files can be deleted after this so
-			#it has to be restarted by hand (bad)
+# 		# left_data = chunk[pos:]
+# 		#if left_data
+# 			#TODO data can stuck here forever if disk is full; also files can be deleted after this so
+# 			#it has to be restarted by hand (bad)
 
-		if (not msg_parsed_num) and not msg_read_num_last:
-			# print "data is still incomplete"
-			yield None, None
-			return
+# 		if (not msg_parsed_num) and not msg_read_num_last:
+# 			# print "data is still incomplete"
+# 			yield None, None
+# 			return
 
-		msg_read_num_last = msg_parsed_num
+# 		msg_read_num_last = msg_parsed_num
 
-		start_pos += pos
+# 		start_pos += pos

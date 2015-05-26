@@ -13,7 +13,12 @@ PICKLE_PROTOCOL = 2
 
 
 def now_formatted ():
-	return time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+	return time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime())
+
+def add_info_from_pyramid_request (d):
+	request = get_current_request()
+	if request:
+		d.update(get_path_params(request.environ)) 
 
 #https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432 (SocketHandler)
 class BeanstalkHandler (logging.Handler):
@@ -30,48 +35,54 @@ class BeanstalkHandler (logging.Handler):
 		self._pid = os.getpid()
 		self.conn = None
 
+	def _reconnect_if_pid_changed (self):
+		#for e.g. gunicorn forking with preload
+
+		cur_pid = os.getpid()
+		if self._pid != cur_pid:
+			# self._log("Logbeaver info: detected pid change (%s -> %s), reconnecting", self._pid, cur_pid)
+			self._close_conn(hard = True)
+			self._pid = cur_pid
+		if not self.conn:
+			self._connect()
+
 	def emit (self, record):
 		d = None
 		try:
 			#inspired by https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l532 (makePickle)
 
-			#if there's another handler like console, it can call .format and record can be already mutated
+			#if there's another handler like console, it can call .format and record can already be mutated here
 			#Also this gets traceback text into record.exc_text
 			_ = self.format(record)
 
 			d = record.__dict__.copy()
 			d['_source'] = self.source
+
+			if d['exc_info']:
+				res = traceback.extract_tb(d['exc_info'][2])[-1]
+				fpath, line_number, _function_name, _text = res
+				d['_exc_fpath'] = fpath
+				d['_exc_line_number'] = line_number
 			del d['exc_info']  #unpickleable
+
 			#.message comes from https://hg.python.org/cpython/file/4252bdba6e89/Lib/logging/__init__.py#l471 (Formatter.format)
 			#and we overwrite it anyway
 			d['message'] = record.getMessage()  #https://docs.python.org/2/library/logging.html#logrecord-objects
 			#msg and args can be unpickleable
 			if isinstance(d['msg'], basestring):
-				#py.warnings logger does this and people can too
+				#py.warnings logger uses this template and people sometimes do too
 				if d['msg'] == '%s':
 					del d['msg']
 			else:
 				del d['msg']
 			del d['args']
 			
-			request = get_current_request()
-			if request:
-				d.update(get_path_params(request.environ)) 
+			add_info_from_pyramid_request(d)
 
-			#reconnect on fork detection (e.g. gunicorn preload case)
-			cur_pid = os.getpid()
-			# self._log("pid1 %s", cur_pid)
-			if self._pid != cur_pid:
-				# self._log("Logbeaver info: detected pid change (%s -> %s), reconnecting", self._pid, cur_pid)
-				self._close_conn(hard = True)
-				self._pid = cur_pid
-			if not self.conn:
-				self._connect()
+			self._reconnect_if_pid_changed()
 
-			# print '************', d['message']
 			serialized = cPickle.dumps(d, PICKLE_PROTOCOL)
 			
-			# self._log("pid2 %s", cur_pid)
 			_job_id = self.conn.put(serialized)
 			# self._log("***** jid %s", _job_id)
 			if not _job_id:
@@ -144,7 +155,7 @@ def log_exc (exc_type, exc_value, exc_tb, extra = None):
 	else:
 		msg = u"%s" % exc_type
 
-	logging.error(msg, exc_info = (exc_type, exc_value, exc_tb), extra = extra)
+	logging.error(msg, exc_info = (exc_type, exc_value, exc_tb), extra = extra) #TODO why 'logging'?
 
 	del exc_type, exc_value, exc_tb
 
@@ -183,7 +194,7 @@ def get_path_params (environ):
 	#request location happens to be useful anyway but mainly because we can get
 	#unhelpful tracebacks (e.g. a view is a generic class in a lib)
 	extra = {}
-	for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING'):
+	for k in ('REQUEST_METHOD', 'PATH_INFO', 'QUERY_STRING', 'HTTP_USER_AGENT', 'HTTP_REFERER'):
 		extra[k] = environ.get(k)
 	return extra
 
@@ -203,8 +214,9 @@ class Middleware (object):
 	def __call__(self, environ, start_response):
 		try:
 			return self.app(environ, start_response)
-		except:
-			extra = get_path_params(environ)
+		except Exception as e:
+			extra = get_path_params(environ) #TODO doesnt it get set in handler.emit?
 			log_exc(*sys.exc_info(), extra = extra)
+			# logging.exception("", extra = extra)
 
 			return self.response_with_error(start_response)

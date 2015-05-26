@@ -11,6 +11,9 @@ import os
 import sys
 
 
+PROTO_VERSION = 2
+
+
 class QueueProcessor (object):
 	def __init__ (self, upstream_uri = 'http://localhost:6543', bean_tube = 'logbeaver',
 			bean_host = 'localhost', bean_port = 11301, bean_conn_timeout = 30, send_timeout = 60,
@@ -120,13 +123,13 @@ class QueueProcessor (object):
 			self.conn.close()
 
 	def _send (self, record, reraise_on_error):
-		events = [{
+		events = {'version': PROTO_VERSION, 'events': [{
 			'source': record.pop('_source'),
 			#TODO use logger time + google "python logging utc" + or hard-set utc for app?
 			'time': calendar.timegm(time.gmtime()), #TODO drops milliseconds, does pg support them anyway?
 			'host': socket.getfqdn(), #TODO cache?
 			'record': record,
-		}]
+		}]}
 
 		serialized = json.dumps(events)
 		url = self.upstream_uri + '/events/create'
@@ -174,7 +177,7 @@ def main ():
 	#TODO review
 	#http://stackoverflow.com/questions/11029717/how-do-i-disable-log-messages-from-the-requests-library
 	logging.getLogger("requests").setLevel(logging.WARNING)
-	logging.info("Starting, upstream: %s" % args.upstream_uri)
+	logging.info("Starting. Will send events to %s" % args.upstream_uri)
 
 	q = QueueProcessor(upstream_uri = args.upstream_uri)
 	if args.inspect:
