@@ -9,16 +9,18 @@ requirements = [
 
 setup(
     name='logbeaver',
-    version='0.5.0',
+    version='0.5.1',
     classifiers=[
-      "Programming Language :: Python",
-      ],
+        "Programming Language :: Python",
+    ],
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
     install_requires=requirements,
     entry_points="""\
         [console_scripts]
-          logbeaver_queproc = logbeaver.queproc:main
+            logbeaver_queproc = logbeaver.queproc:main
+        [paste.filter_factory]
+            middleware = logbeaver.handler:filter_factory
     """,
 )

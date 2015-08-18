@@ -6,7 +6,10 @@ import time
 import traceback
 import os
 import beanstalkc
-from pyramid.threadlocal import get_current_request
+try:
+	from pyramid.threadlocal import get_current_request
+except ImportError:
+	get_current_request = None
 
 
 PICKLE_PROTOCOL = 2
@@ -16,9 +19,10 @@ def now_formatted ():
 	return time.strftime("%Y-%m-%d %H:%M:%S +0000", time.gmtime())
 
 def add_info_from_pyramid_request (d):
-	request = get_current_request()
-	if request:
-		d.update(get_path_params(request.environ)) 
+	if get_current_request:
+		request = get_current_request()
+		if request:
+			d.update(get_path_params(request.environ)) 
 
 #https://hg.python.org/cpython/file/2.7/Lib/logging/handlers.py#l432 (SocketHandler)
 class BeanstalkHandler (logging.Handler):
@@ -220,3 +224,8 @@ class Middleware (object):
 			# logging.exception("", extra = extra)
 
 			return self.response_with_error(start_response)
+
+def filter_factory (global_config, **local_conf):
+	def app (application):
+		return Middleware(application)
+	return app
