@@ -15,3 +15,7 @@ Pipe your log (e.g. nginx access log) from `tail -n 0 -F` to this tool, it will 
 
 ## License
 [The MIT License](http://www.opensource.org/licenses/mit-license.php)
+
+
+
+python -m unittest discover -v --failfast -s logbeaver/tests -p 'test.py'

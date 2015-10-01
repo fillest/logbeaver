@@ -153,9 +153,9 @@ class BeanstalkHandler (logging.Handler):
 		logging.Handler.close(self)
 
 def log_exc (exc_type, exc_value, exc_tb, extra = None):
-	val = u"%s" % exc_value
+	val = str(exc_value).decode('utf-8', 'replace')
 	if val:
-		msg = u"%s: %s" % (exc_type, exc_value)
+		msg = u"%s: %s" % (exc_type, val)
 	else:
 		msg = u"%s" % exc_type
 

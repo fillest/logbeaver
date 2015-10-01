@@ -86,6 +86,9 @@ class QueueProcessor (object):
 				job = self.conn.reserve(timeout = timeout)
 				#note: "jobs are re-queued by beanstalkd after a "time to run" (120 seconds, per default) is surpassed."
 
+				if job is None:
+					raise Exception("reserving a job timed out (%s)" % timeout)
+
 				serialized = job.body
 				record = None
 				try:
@@ -140,7 +143,7 @@ class QueueProcessor (object):
 		#http://docs.python-requests.org/en/latest/api/#exceptions
 		#https://github.com/kennethreitz/requests/blob/master/requests/exceptions.py
 		except requests.exceptions.RequestException as e:
-			self.logger.warning("%s: %s" % (type(e), e))
+			self.logger.warning("(%s) %s: %s" % (url, type(e), e))
 			if reraise_on_error:
 				self.logger.warning("reraising")
 				raise

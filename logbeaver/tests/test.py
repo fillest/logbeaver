@@ -44,7 +44,7 @@ class Test1 (unittest.TestCase):
 		config.add_route('test', '/test')
 		config.add_route('test1', '/test1')
 		def raise_exc_view (request):
-			raise TestException()
+			raise TestException("тест")
 		def raise_404 (request):
 			logging.warn("test123")
 			# from pyramid.httpexceptions import exception_response; raise exception_response(404)
@@ -171,6 +171,7 @@ class Test1 (unittest.TestCase):
 		self.assertEquals(r['QUERY_STRING'], "test1")
 		assert "TestException" in r['exc_text'], r
 		assert "test.TestException" in r['message'], r
+		assert u"тест" in r['message'], r
 		# g.next()
 
 
