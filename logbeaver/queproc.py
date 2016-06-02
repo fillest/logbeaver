@@ -9,6 +9,7 @@ import argparse
 import logging
 import os
 import sys
+import base64
 
 
 PROTO_VERSION = 2
@@ -103,7 +104,7 @@ class QueueProcessor (object):
 					if msg and not isinstance(msg, unicode):
 						record['msg'] = msg.decode('utf-8', 'replace')
 					#TODO document or show a note that it's lossy
-					for n in ('QUERY_STRING', 'PATH_INFO'):
+					for n in ('QUERY_STRING', 'PATH_INFO', 'HTTP_USER_AGENT'): #TODO automate maintenance of this list, last time HTTP_USER_AGENT was not trivial to debug 
 						qs = record.get(n)
 						if qs:
 							record[n] = qs.decode('utf-8', 'replace')
@@ -118,7 +119,7 @@ class QueueProcessor (object):
 				except:
 					job.release()
 
-					self.logger.error("Error (see traceback below) while processing item:\n%s" % (record,))
+					self.logger.error("Error while processing item. base64-encoded item, printed item and error traceback:\n%s\n%s", base64.b64encode(serialized), record)
 					raise
 
 				yield record
@@ -134,7 +135,10 @@ class QueueProcessor (object):
 			'record': record,
 		}]}
 
+		# try:
 		serialized = json.dumps(events)
+		# except:
+			# self.logger.exception("Failed to json.dumps this ():\n%s", events)
 		url = self.upstream_uri + '/events/create'
 		headers = {'content-type': 'application/json'}
 

@@ -239,6 +239,15 @@ class Test1 (unittest.TestCase):
 		self.assertIn("ZeroDivisionError", r['exc_text'])
 
 
+		#TODO passing HTTP_USER_AGENT in extra is a quick hack relying on Middleware implementation
+		logging.info("test", extra = dict(HTTP_USER_AGENT =
+			'Mozilla/5.0 (Linux; Android 5.1.1; SM-J320F Build/LMY47V) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.93 M\x02\x82\x83\xd4\xfbe\xa2=~,ri/537.36'))
+
+		r = g.next()
+		self.assertIn("Mozilla", r['HTTP_USER_AGENT'])
+		self.assertIn("ri/537.36", r['HTTP_USER_AGENT'])
+
+
 		logging.info("test %s" % u'тест')
 
 		r = g.next()
