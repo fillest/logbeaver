@@ -239,6 +239,7 @@ class Test1 (unittest.TestCase):
 		self.assertIn("ZeroDivisionError", r['exc_text'])
 
 
+		#----
 		#TODO passing HTTP_USER_AGENT in extra is a quick hack relying on Middleware implementation
 		logging.info("test", extra = dict(HTTP_USER_AGENT =
 			'Mozilla/5.0 (Linux; Android 5.1.1; SM-J320F Build/LMY47V) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.93 M\x02\x82\x83\xd4\xfbe\xa2=~,ri/537.36'))
@@ -246,6 +247,15 @@ class Test1 (unittest.TestCase):
 		r = g.next()
 		self.assertIn("Mozilla", r['HTTP_USER_AGENT'])
 		self.assertIn("ri/537.36", r['HTTP_USER_AGENT'])
+
+
+		logging.info("test", extra = dict(HTTP_REFERER =
+			'htt\x8ai\xe4\x93\xbf\x93?\xaeh\xa04Eo\x9c\xc1\tB\xcf>\xa4+\xed/Zb\xdc\xca\x04W\x80\xff\xf6\xec\x0bfme.html4\xccm\xa8\x8a\xf7\xab\xe5\xf3\x17\x85=\xa9\x81\x03\xad<H\xd2\x88M\xbb\xcd\x0fL}\x9a4T\xc18Cht\x95\xc6\xf4\x16\x03xfj&content=ololo'))
+
+		r = g.next()
+		self.assertIn("htt", r['HTTP_REFERER'])
+		self.assertIn("ololo", r['HTTP_REFERER'])
+		#----
 
 
 		logging.info("test %s" % u'тест')

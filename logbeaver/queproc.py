@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import base64
+import random
 
 
 PROTO_VERSION = 2
@@ -103,15 +104,16 @@ class QueueProcessor (object):
 					msg = record.get('msg')
 					if msg and not isinstance(msg, unicode):
 						record['msg'] = msg.decode('utf-8', 'replace')
-					#TODO document or show a note that it's lossy
-					for n in ('QUERY_STRING', 'PATH_INFO', 'HTTP_USER_AGENT'): #TODO automate maintenance of this list, last time HTTP_USER_AGENT was not trivial to debug 
+					#TODO document or show a note that it's lossy -- or better displey the original data
+					#TODO automate maintenance of this list, last time HTTP_USER_AGENT was not trivial to debug 
+					for n in ('QUERY_STRING', 'PATH_INFO', 'HTTP_USER_AGENT', 'HTTP_REFERER'):
 						qs = record.get(n)
 						if qs:
 							record[n] = qs.decode('utf-8', 'replace')
 
 					if not self._send(record, reraise_on_error):
 						job.release()
-						time.sleep(3)
+						time.sleep(random.uniform(2.0, 5.0))
 						#TODO touch and try send again? + limit for tests
 						continue
 					else:
